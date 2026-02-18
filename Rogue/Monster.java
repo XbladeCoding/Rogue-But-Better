@@ -41,7 +41,7 @@ public class Monster {
         // parent[i][j] = the site we came FROM to reach site (i,j)
         // This lets us trace back the path once we find the rogue
         Site[][] parent = new Site[n][n];
-          
+        
         // The queue holds sites we need to explore
         // LinkedList works as a queue: add to back, remove from front
         Queue<Site> queue = new LinkedList<>();
