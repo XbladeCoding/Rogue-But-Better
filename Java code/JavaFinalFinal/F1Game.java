@@ -4,10 +4,10 @@ import java.awt.event.KeyEvent;
 import java.util.Map;
 
 public class F1Game {
-    private static final int WIDTH = 720;
-    private static final int HEIGHT = 480;
-    private static final int VIEW_WIDTH = 460;
-    private static final int VIEW_HEIGHT = 320;
+    private static final int WIDTH = 1200;
+    private static final int HEIGHT = 800;
+    private static final int VIEW_WIDTH = 900;
+    private static final int VIEW_HEIGHT = 600;
     private static final int VIEW_X = (WIDTH - VIEW_WIDTH) / 2;
     private static final int VIEW_Y = (HEIGHT - VIEW_HEIGHT) / 2;
 
@@ -57,6 +57,7 @@ public class F1Game {
     private boolean inMenu = true;
     private boolean mouseWasPressed = false;
     private int hoveredTrackIndex = -1;
+    private int selectedTrackIndex = 0;
     // Transition animation state
     private boolean transitioning = false;
     private int transitionDirection = 0; // 1: menu->game, -1: game->menu
@@ -78,37 +79,45 @@ public class F1Game {
     private void initializeTracks() {
         this.tracks = new TrackDefinition[]{
             new TrackDefinition("Monaco", new double[][]{
-                {520, 350}, {480, 410}, {420, 450}, {360, 470}, {300, 450},
-                {250, 390}, {240, 320}, {260, 250}, {310, 210}, {380, 190},
-                {460, 190}, {520, 220}, {560, 280}, {590, 340}, {570, 380},
-                {520, 350}
+                {520, 350}, {470, 420}, {390, 480}, {310, 500}, {240, 450},
+                {210, 350}, {240, 250}, {330, 200}, {420, 190}, {520, 210},
+                {570, 280}, {590, 350}, {550, 400}, {520, 350}
             }),
             new TrackDefinition("Silverstone", new double[][]{
-                {180, 100}, {500, 80}, {840, 140}, {920, 260}, {850, 380},
-                {720, 430}, {580, 520}, {370, 520}, {220, 420}, {170, 300},
-                {190, 210}, {250, 160}, {340, 130}, {420, 120}
+                {200, 100}, {480, 70}, {820, 110}, {920, 280}, {860, 420},
+                {700, 480}, {520, 520}, {350, 500}, {200, 380}, {180, 250},
+                {190, 180}, {280, 130}, {380, 100}
             }),
             new TrackDefinition("Long Circuit", new double[][]{
-                {200, 150}, {500, 140}, {800, 160}, {1000, 300}, {900, 500},
-                {600, 550}, {350, 500}, {200, 350}, {220, 200}
+                {180, 160}, {450, 140}, {750, 150}, {950, 300}, {850, 520},
+                {520, 540}, {280, 480}, {180, 320}, {200, 200}
             }),
             new TrackDefinition("Monza", new double[][]{
-                {220, 220}, {420, 160}, {660, 180}, {840, 260}, {820, 360},
-                {640, 460}, {460, 500}, {300, 420}, {220, 300}, {220, 220}
+                {220, 240}, {380, 180}, {600, 200}, {800, 300}, {820, 380},
+                {680, 480}, {480, 520}, {320, 450}, {240, 350}, {220, 240}
             }),
-            new TrackDefinition("Suzuka", new double[][]{
-                {160, 260}, {260, 110}, {380, 100}, {520, 140}, {620, 240},
-                {650, 330}, {620, 430}, {520, 520}, {410, 520}, {310, 450},
-                {270, 360}, {290, 270}, {340, 220}, {430, 200}, {540, 240},
-                {620, 330}
+            new TrackDefinition("Suzuka Figure-8", new double[][]{
+                {150, 300}, {250, 150}, {380, 130}, {520, 160}, {600, 260},
+                {580, 350}, {480, 420}, {380, 440}, {300, 400}, {250, 310},
+                {220, 240}, {280, 160}, {380, 140}
             }),
             new TrackDefinition("Spa", new double[][]{
-                {270, 160}, {460, 120}, {690, 160}, {830, 300}, {760, 470},
-                {620, 560}, {430, 560}, {260, 470}, {190, 340}, {220, 220}
+                {280, 150}, {460, 100}, {700, 140}, {850, 310}, {780, 480},
+                {600, 550}, {380, 540}, {220, 450}, {180, 320}, {220, 200}
+            }),
+            new TrackDefinition("Istanbul", new double[][]{
+                {320, 220}, {520, 140}, {760, 170}, {900, 340}, {760, 480}, {500, 540}, {300, 460}, {240, 310}
+            }),
+            new TrackDefinition("Nurburgring", new double[][]{
+                {220, 330}, {360, 220}, {560, 180}, {780, 220}, {920, 360}, {840, 480}, {600, 540}, {400, 500}, {260, 400}
+            }),
+            new TrackDefinition("Interlagos Tight", new double[][]{
+                {260, 250}, {380, 160}, {540, 150}, {700, 200}, {800, 320}, {720, 440}, {520, 500}, {340, 440}, {260, 320}
             })
         };
 
         int selectedIndex = (int) (Math.random() * this.tracks.length);
+        selectedTrackIndex = selectedIndex;
         TrackDefinition selected = this.tracks[selectedIndex];
         trackName = selected.name;
         bestLapPath = bestLapPaths.get(trackName);
@@ -479,17 +488,31 @@ public class F1Game {
             if (!mouseWasPressed) {
                 double mouseX = StdDraw.mouseX();
                 double mouseY = StdDraw.mouseY();
+                double availableWidth = WIDTH - 2 * MENU_MARGIN;
+                double previewWidth = (availableWidth - (MENU_COLUMNS - 1) * MENU_MARGIN) / MENU_COLUMNS;
+                double previewHeight = MENU_PREVIEW_HEIGHT;
 
                 // Check track selection
                 for (int i = 0; i < tracks.length; i++) {
-                    if (isMouseInTrackButton(i, mouseX, mouseY)) {
+                    if (isMouseInTrackButton(i, mouseX, mouseY, previewWidth, previewHeight)) {
                         selectTrack(i);
-                        inMenu = false;
-                        lapTimingStarted = false;
-                        lapStartTime = 0;
                         mouseWasPressed = true;
                         return;
                     }
+                }
+
+                // Check start button click
+                double startW = 160;
+                double startH = 40;
+                double startX = WIDTH - 120;
+                double startY = 80;
+                if (mouseX >= startX - startW / 2.0 && mouseX <= startX + startW / 2.0 &&
+                    mouseY >= startY - startH / 2.0 && mouseY <= startY + startH / 2.0) {
+                    inMenu = false;
+                    lapTimingStarted = false;
+                    lapStartTime = 0;
+                    mouseWasPressed = true;
+                    return;
                 }
             }
             mouseWasPressed = true;
@@ -500,16 +523,18 @@ public class F1Game {
 
     // audio removed
 
-    private boolean isMouseInTrackButton(int trackIndex, double mouseX, double mouseY) {
+    private boolean isMouseInTrackButton(int trackIndex, double mouseX, double mouseY,
+                                           double previewWidth, double previewHeight) {
         int col = trackIndex % MENU_COLUMNS;
         int row = trackIndex / MENU_COLUMNS;
-        int x = MENU_MARGIN + col * (MENU_PREVIEW_WIDTH + MENU_MARGIN);
-        int y = MENU_TOP_OFFSET + row * (MENU_PREVIEW_HEIGHT + MENU_MARGIN);
-        return mouseX >= x && mouseX <= x + MENU_PREVIEW_WIDTH &&
-               mouseY >= y && mouseY <= y + MENU_PREVIEW_HEIGHT;
+        double x = MENU_MARGIN + col * (previewWidth + MENU_MARGIN);
+        double y = MENU_TOP_OFFSET + row * (previewHeight + MENU_MARGIN);
+        return mouseX >= x && mouseX <= x + previewWidth &&
+               mouseY >= y && mouseY <= y + previewHeight;
     }
 
     private void selectTrack(int index) {
+        selectedTrackIndex = index;
         TrackDefinition selected = tracks[index];
         trackName = selected.name;
         trackPoints = generateTrack(prepareAnchors(selected.anchors), TRACK_DETAIL);
@@ -586,7 +611,7 @@ public class F1Game {
 
             StdDraw.setPenColor(StdDraw.WHITE);
             StdDraw.setPenRadius(0.005);
-            StdDraw.rectangle(VIEW_X + VIEW_WIDTH / 2.0, VIEW_Y + VIEW_HEIGHT / 2.0,
+            StdDraw.rectangle(VIEW_X + VIEW_WIDTH / 2.0, VIEW_Y + VIEW_HEIGHT / 2.0 + 20,
                     VIEW_WIDTH / 2.0, VIEW_HEIGHT / 2.0);
 
             car.draw(camX, camY, VIEW_X, VIEW_Y, VIEW_WIDTH, VIEW_HEIGHT);
@@ -624,57 +649,66 @@ public class F1Game {
         StdDraw.setFont(new java.awt.Font("Verdana", java.awt.Font.PLAIN, 16));
         StdDraw.text(cardX - 10, cardY - 12, "Choose a track and press Start to race!");
 
-        // Draw track buttons with previews
-        for (int i = 0; i < tracks.length; i++) {
-            int col = i % MENU_COLUMNS;
-            int row = i / MENU_COLUMNS;
-            int x = MENU_MARGIN + col * (MENU_PREVIEW_WIDTH + MENU_MARGIN);
-            int y = MENU_TOP_OFFSET + row * (MENU_PREVIEW_HEIGHT + MENU_MARGIN);
+        // Compute responsive grid for track buttons to fill the window
+        int columns = MENU_COLUMNS;
+        double availableWidth = WIDTH - 2 * MENU_MARGIN;
+        double previewWidth = (availableWidth - (columns - 1) * MENU_MARGIN) / columns;
+        double previewHeight = MENU_PREVIEW_HEIGHT;
+        int rows = (tracks.length + columns - 1) / columns;
+        // center the grid horizontally and position it below the top card
+        double gridWidth = columns * previewWidth + (columns - 1) * MENU_MARGIN;
+        double gridStartX = (WIDTH - gridWidth) / 2.0 + previewWidth/2.0;
+        double gridStartY = MENU_TOP_OFFSET;
 
-            double centerX = x + MENU_PREVIEW_WIDTH / 2.0;
-            double centerY = y + MENU_PREVIEW_HEIGHT / 2.0;
+        hoveredTrackIndex = -1;
+        for (int i = 0; i < tracks.length; i++) {
+            int col = i % columns;
+            int row = i / columns;
+            double centerX = gridStartX + col * (previewWidth + MENU_MARGIN);
+            double centerY = gridStartY + row * (previewHeight + MENU_MARGIN) + previewHeight/2.0;
+            double x = centerX - previewWidth/2.0;
+            double y = centerY - previewHeight/2.0;
 
             // Update hover state
             double mx = StdDraw.mouseX();
             double my = StdDraw.mouseY();
-            if (isMouseInTrackButton(i, mx, my)) {
+            if (isMouseInTrackButton(i, mx, my, previewWidth, previewHeight)) {
                 hoveredTrackIndex = i;
             }
 
             // Shadow
             StdDraw.setPenColor(new Color(0, 0, 0, 100));
-            StdDraw.filledRectangle(centerX + 4, centerY - 4, MENU_PREVIEW_WIDTH / 2.0, MENU_PREVIEW_HEIGHT / 2.0);
+            StdDraw.filledRectangle(centerX + 4, centerY - 4, previewWidth / 2.0, previewHeight / 2.0);
 
             // Button background
-            if (i == hoveredTrackIndex) {
+            if (i == selectedTrackIndex) {
+                StdDraw.setPenColor(new Color(210, 230, 255));
+            } else if (i == hoveredTrackIndex) {
                 StdDraw.setPenColor(new Color(250, 250, 230));
             } else {
                 StdDraw.setPenColor(new Color(245, 245, 245));
             }
-            StdDraw.filledRectangle(centerX, centerY, MENU_PREVIEW_WIDTH / 2.0, MENU_PREVIEW_HEIGHT / 2.0);
+            StdDraw.filledRectangle(centerX, centerY, previewWidth / 2.0, previewHeight / 2.0);
 
-            // Track layout preview
-            double previewWidth = 80;
-            double previewHeight = 60;
-            double previewLeft = x + 12;
-            double previewBottom = y + MENU_PREVIEW_HEIGHT - previewHeight - 12;
-            drawTrackLayoutPreview(tracks[i], previewLeft, previewBottom, previewWidth, previewHeight);
+            // Track layout preview (fit into the box with padding)
+            double padding = 12;
+            drawTrackLayoutPreview(tracks[i], x + padding, y + padding, previewWidth - padding*2, previewHeight - padding*2);
 
             // Border
             StdDraw.setPenRadius(0.003);
             StdDraw.setPenColor(new Color(30, 30, 30));
-            StdDraw.rectangle(centerX, centerY, MENU_PREVIEW_WIDTH / 2.0, MENU_PREVIEW_HEIGHT / 2.0);
+            StdDraw.rectangle(centerX, centerY, previewWidth / 2.0, previewHeight / 2.0);
 
             // Track name
             StdDraw.setFont(new Font("Arial", Font.BOLD, 14));
             StdDraw.setPenColor(new Color(10, 10, 10));
-            StdDraw.text(x + MENU_PREVIEW_WIDTH * 0.7, y + 22, tracks[i].name);
+            StdDraw.text(x + previewWidth * 0.7, y + 22, tracks[i].name);
             // show best lap for this track if available
             long b = bestLapTimes.getOrDefault(tracks[i].name, Long.MAX_VALUE);
             String best = (b == Long.MAX_VALUE) ? "--:--.---" : formatTime(b);
             StdDraw.setFont(new Font("Arial", Font.PLAIN, 12));
             StdDraw.setPenColor(new Color(80, 80, 80));
-            StdDraw.text(x + MENU_PREVIEW_WIDTH * 0.7, y + 6, "Best: " + best);
+            StdDraw.text(x + previewWidth * 0.7, y + 6, "Best: " + best);
         }
 
         // Start button
@@ -712,7 +746,8 @@ public class F1Game {
         }
         double trackWidth = Math.max(maxX - minX, 1.0);
         double trackHeight = Math.max(maxY - minY, 1.0);
-        double scale = Math.min((width - 12) / trackWidth, (height - 12) / trackHeight);
+        double pad = 6;
+        double scale = Math.min((width - pad*2) / trackWidth, (height - pad*2) / trackHeight);
         double centerX = left + width / 2.0;
         double centerY = bottom + height / 2.0;
         double offsetX = centerX - (minX + maxX) / 2.0 * scale;
@@ -736,6 +771,14 @@ public class F1Game {
 
     private double worldToScreenY(double worldY, double camY) {
         return VIEW_Y + worldY - camY + VIEW_HEIGHT / 2.0;
+    }
+
+    private double screenToWorldX(double screenX, double camX) {
+        return camX + screenX - VIEW_X - VIEW_WIDTH / 2.0;
+    }
+
+    private double screenToWorldY(double screenY, double camY) {
+        return camY + screenY - VIEW_Y - VIEW_HEIGHT / 2.0;
     }
 
     private void drawCheckerboardLine(double x1, double y1, double x2, double y2, int segments,
@@ -814,25 +857,22 @@ public class F1Game {
         // Fill the view area with a dark green base for the grass
         StdDraw.setPenColor(new Color(22, 120, 30));
         StdDraw.filledRectangle(VIEW_X + VIEW_WIDTH / 2.0, VIEW_Y + VIEW_HEIGHT / 2.0,
-                VIEW_WIDTH / 2.0 + 10, VIEW_HEIGHT / 2.0 + 10);
+            VIEW_WIDTH / 2.0, VIEW_HEIGHT / 2.0);
 
         // Draw a simple grass texture over the fill
         StdDraw.setPenRadius(0.002);
-        for (double x = camX - VIEW_WIDTH / 2.0 - 30; x <= camX + VIEW_WIDTH / 2.0 + 30; x += 16) {
-            for (double y = camY - VIEW_HEIGHT / 2.0 - 30; y <= camY + VIEW_HEIGHT / 2.0 + 30; y += 16) {
-                double sx = worldToScreenX(x, camX);
-                double sy = worldToScreenY(y, camY);
-                if (sx >= VIEW_X - 10 && sx <= VIEW_X + VIEW_WIDTH + 10
-                        && sy >= VIEW_Y - 10 && sy <= VIEW_Y + VIEW_HEIGHT + 10) {
-                    int ix = (int) Math.round(x);
-                    int iy = (int) Math.round(y);
-                    if (((ix + iy) & 1) == 0) {
-                        StdDraw.setPenColor(new Color(45, 180, 45));
-                        StdDraw.line(sx - 2, sy - 2, sx + 2, sy + 2);
-                    } else {
-                        StdDraw.setPenColor(new Color(35, 160, 35));
-                        StdDraw.point(sx, sy);
-                    }
+        for (double sx = VIEW_X; sx <= VIEW_X + VIEW_WIDTH; sx += 20) {
+            for (double sy = VIEW_Y; sy <= VIEW_Y + VIEW_HEIGHT; sy += 20) {
+                double wx = screenToWorldX(sx, camX);
+                double wy = screenToWorldY(sy, camY);
+                int ix = (int) Math.round(wx);
+                int iy = (int) Math.round(wy);
+                if (((ix + iy) & 1) == 0) {
+                    StdDraw.setPenColor(new Color(45, 180, 45));
+                    StdDraw.line(sx - 2, sy - 2, sx + 2, sy + 2);
+                } else {
+                    StdDraw.setPenColor(new Color(35, 160, 35));
+                    StdDraw.point(sx, sy);
                 }
             }
         }
@@ -866,22 +906,22 @@ public class F1Game {
 
         StdDraw.setPenColor(StdDraw.WHITE);
         StdDraw.setFont();
-        StdDraw.text(WIDTH / 2.0, HEIGHT - 30, "Track: " + trackName);
-        StdDraw.text(90, HEIGHT - 30, String.format("Speed: %.1f", car.getSpeed()));
+        StdDraw.text(WIDTH / 2.0, HEIGHT - 50, "Track: " + trackName);
+        StdDraw.text(90, HEIGHT - 50, String.format("Speed: %.1f", car.getSpeed()));
         // Lap timing display
         String currentLap = "--:--.---";
         if (lapTimingStarted) {
             currentLap = formatTime(now - lapStartTime);
         }
         String bestLap = (bestLapTime == Long.MAX_VALUE) ? "--:--.---" : formatTime(bestLapTime);
-        StdDraw.text(90, HEIGHT - 70, "Lap: " + currentLap);
+        StdDraw.text(90, HEIGHT - 90, "Lap: " + currentLap);
         if (drawBestLap) {
             StdDraw.setPenColor(new Color(255, 215, 0));
-            StdDraw.text(90, HEIGHT - 90, "Best: " + bestLap);
+            StdDraw.text(90, HEIGHT - 110, "Best: " + bestLap);
             StdDraw.setPenColor(StdDraw.WHITE);
         }
 
-        int controlsY = HEIGHT - 110;
+        int controlsY = HEIGHT - 130;
         if (lastLapDelta != null && now - lastLapDeltaTime < 5000) {
             long delta = lastLapDelta;
             long absDelta = Math.abs(delta);
@@ -889,10 +929,10 @@ public class F1Game {
             String deltaText = String.format("%s%02d:%02d.%03d", deltaSign,
                     absDelta / 60000, (absDelta / 1000) % 60, absDelta % 1000);
             StdDraw.setPenColor(delta < 0 ? new Color(100, 255, 100) : new Color(255, 120, 120));
-            StdDraw.text(90, HEIGHT - 110, "Δ: " + deltaText);
+            StdDraw.text(90, HEIGHT - 130, "Δ: " + deltaText);
             StdDraw.setPenColor(StdDraw.WHITE);
-            StdDraw.text(90, HEIGHT - 130, delta < 0 ? "Time gained" : "Time lost");
-            controlsY = HEIGHT - 150;
+            StdDraw.text(90, HEIGHT - 150, delta < 0 ? "Time gained" : "Time lost");
+            controlsY = HEIGHT - 170;
         }
         StdDraw.text(90, controlsY, "W/up:Accelerate S/down:Brake A/left:Left D/right:Right");
     }
