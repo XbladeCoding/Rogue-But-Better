@@ -1,3 +1,84 @@
+/*
+F1Game.java
+
+A simple 2D top-down Formula 1 racing game using StdDraw for graphics.
+Features multiple tracks, car physics, lap timing, and a main menu.
+
+Controls:
+- Accelerate: W or Up Arrow
+- Brake: S or Down Arrow
+- Steer Left: A or Left Arrow
+- Steer Right: D or Right Arrow
+
+In the main menu, click on a track to select it, then click "Start Race"
+
+Prompts:
+make a working f1 game with realistic phsyics in traction and acceleration and velocity. Use the stdDraw library and display the car and track.
+
+fix the steering and enlarge the track. collision detect with the barriers.
+
+make the track 1:1 scale with the car, and add a racing line for ease of use.
+
+add a timer and finish/start line to record best lap and current lap, and abandon the lap if there is a collision.
+
+fix the track, the track is not generating properly. II also do not see a start/ finish line. make the start/finish line a checker b/w pattern to be visible.
+the car is also getting stuck.
+
+make the start/finish line a line, not a dot. remove crash phsyics and only slow the car down.
+
+on the long track, there are two tracks. fix this bug. also, start the timer when the car starts across the line and end it when it goes across the line on the other side. if the itme is a new best, add it to the best time.
+
+on monza, there is a bug where theres two tracks. fix it.
+
+add a red blinking animation to when a new best time is set before returning the time to white.
+
+the timer still does not work.
+
+the red blinking animation is not playing.
+
+replace the long circuit, it is too confusing. also, the animation is still not working.
+
+make the area that is not track realstic grass, add texture to the black track, and fix the track so that it is more defined where to turn. There is also a bug in hairpin corners where the track looks weird and the racing line is off. Add a realistic shape to the car as well.
+
+redraw monza, it has bugs
+
+enable arrow key controls
+
+fix the direction of the car sprite
+
+Create a game menu. When the program is run, it opens a menu with all the track to play, the user can pick any of the tracks. all of the track shapes are also displayed along with the track names. There should be a button in the top right to exit a track, and a user’s scores for that track are stored in that track. 
+
+fix the menu orientation.
+
+the exit sign is in the tracks, not the menu. include an exit sing in each track that exits to the menu.
+
+polish all of the visuals and include smooth transition animations between screens.
+
+i want you to polish the menu by highlighting a button when it is hovered over, and providing a smoother transition (like a slide) to improve quality.
+
+there is an error where the track best time is stored globally, not separate for each track. make sure each track has its own indivudual best time.
+
+implement a mechanic that when a lap is completed, it shows how faster/slower the lap was from the best lap, and display this number next to the best lap with a +/-.
+
+create a ghost car of the best lap and make it 30% transparent.
+
+resize the window to be larger
+
+resize the menu to fit the new window and add 3 more tracks.
+
+move all the white boxes up, and also make all the tracks more intersting while keeping them playable.
+
+the window for viewing the car is a bit large, making it laggy. resize the window to make it less laggy.
+
+no, make the window bigger but the grass box smaller
+
+the grass window is misaligned and bugged, fix it
+
+Author: Rohan Balasubramanian (coded with help from Copilot)
+Language: Java 24.0.2
+DOC: 6/9/2026
+*/
+
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.event.KeyEvent;
