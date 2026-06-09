@@ -29,7 +29,6 @@ public class F1Game {
     private double prevCarX, prevCarY;
     private boolean lapTimingStarted = false;
     private long lapStartTime = 0;
-    private long bestLapTime = Long.MAX_VALUE;
     private long bestLapBlinkStart = 0;
     private double[][] trackPoints;
     private double[][] leftBoundary;
@@ -49,6 +48,12 @@ public class F1Game {
 
     private TrackDefinition[] tracks;
     private Map<String, Long> bestLapTimes;
+    private Map<String, java.util.List<double[]>> bestLapPaths;
+    private java.util.List<double[]> bestLapPath;
+    private java.util.List<double[]> currentLapPath;
+    private long bestLapTime = Long.MAX_VALUE;
+    private Long lastLapDelta = null; // ms difference: lap - best
+    private long lastLapDeltaTime = 0;
     private boolean inMenu = true;
     private boolean mouseWasPressed = false;
     private int hoveredTrackIndex = -1;
@@ -57,16 +62,16 @@ public class F1Game {
     private int transitionDirection = 0; // 1: menu->game, -1: game->menu
     private double transitionProgress = 0.0; // 0..1
     private static final double TRANSITION_DURATION = 0.5; // seconds
+    private int pendingSelectedIndex = -1;
 
-    private static final int AUDIO_SAMPLE_RATE = 44100;
-    private static final double ACCEL_SOUND_DURATION = 0.18;
-    private static final double BRAKE_SOUND_DURATION = 0.18;
-    private static final long AUDIO_THROTTLE_MS = 120;
-    private long lastAccelSoundTime = 0;
-    private long lastBrakeSoundTime = 0;
+    // audio removed
 
     public F1Game() {
         car = new Car(WIDTH / 2, HEIGHT / 2);
+        bestLapTimes = new java.util.HashMap<>();
+        bestLapPaths = new java.util.HashMap<>();
+        currentLapPath = new java.util.ArrayList<>();
+        bestLapPath = null;
         initializeTracks();
     }
 
@@ -106,6 +111,7 @@ public class F1Game {
         int selectedIndex = (int) (Math.random() * this.tracks.length);
         TrackDefinition selected = this.tracks[selectedIndex];
         trackName = selected.name;
+        bestLapPath = bestLapPaths.get(trackName);
         trackPoints = generateTrack(prepareAnchors(selected.anchors), TRACK_DETAIL);
         generateTrackBoundaries();
         updateWorldBounds();
@@ -276,14 +282,29 @@ public class F1Game {
                 if (!lapTimingStarted) {
                     lapTimingStarted = true;
                     lapStartTime = now;
+                    currentLapPath.clear();
+                    currentLapPath.add(new double[]{x2, y2, car.getAngle()});
                 } else {
                     long lapTime = now - lapStartTime;
                     if (lapTime > 500) {
-                        if (lapTime < bestLapTime) {
-                            bestLapTime = lapTime;
-                            bestLapBlinkStart = now;
-                        }
+                            // compute delta compared to current best before updating
+                            if (bestLapTime == Long.MAX_VALUE) {
+                                lastLapDelta = null;
+                            } else {
+                                lastLapDelta = lapTime - bestLapTime;
+                                lastLapDeltaTime = now;
+                            }
+                            if (lapTime < bestLapTime) {
+                                currentLapPath.add(new double[]{car.getX(), car.getY(), car.getAngle()});
+                                bestLapTime = lapTime;
+                                bestLapTimes.put(trackName, lapTime);
+                                bestLapPaths.put(trackName, new java.util.ArrayList<>(currentLapPath));
+                                bestLapPath = bestLapPaths.get(trackName);
+                                bestLapBlinkStart = now;
+                            }
                         lapStartTime = now;
+                        currentLapPath.clear();
+                        currentLapPath.add(new double[]{x2, y2, car.getAngle()});
                     }
                 }
             }
@@ -372,6 +393,11 @@ public class F1Game {
                 } else {
                     // at halfway swap the scene
                     if (transitionDirection == 1 && transitionProgress >= 0.5 && inMenu) {
+                        // load pending track and enter game at halfway
+                        if (pendingSelectedIndex >= 0) {
+                            selectTrack(pendingSelectedIndex);
+                            pendingSelectedIndex = -1;
+                        }
                         inMenu = false;
                     }
                     if (transitionDirection == -1 && transitionProgress >= 0.5 && !inMenu) {
@@ -384,6 +410,9 @@ public class F1Game {
                     car.update(FRICTION, MAX_SPEED, TRACTION);
                     checkTrackCollision();
                     checkStartFinishCrossing();
+                    if (lapTimingStarted) {
+                        currentLapPath.add(new double[]{car.getX(), car.getY(), car.getAngle()});
+                    }
                 }
             }
 
@@ -406,11 +435,9 @@ public class F1Game {
 
         if (acceleratingNow) {
             car.accelerate(ACCELERATION);
-            playAccelerationSound();
         }
         if (brakingNow) {
             car.brake(BRAKE_DECELERATION);
-            playBrakeSound();
         }
         // Arrow keys (left/right)
         if (StdDraw.isKeyPressed('A') || StdDraw.isKeyPressed('a')) {
@@ -471,58 +498,7 @@ public class F1Game {
         }
     }
 
-    private void playAccelerationSound() {
-        long now = System.currentTimeMillis();
-        if (now - lastAccelSoundTime < AUDIO_THROTTLE_MS) {
-            return;
-        }
-        lastAccelSoundTime = now;
-        new Thread(() -> StdAudio.play(createAccelerationSound())).start();
-    }
-
-    private void playBrakeSound() {
-        long now = System.currentTimeMillis();
-        if (now - lastBrakeSoundTime < AUDIO_THROTTLE_MS) {
-            return;
-        }
-        lastBrakeSoundTime = now;
-        new Thread(() -> StdAudio.play(createBrakeSound())).start();
-    }
-
-    private double[] createAccelerationSound() {
-        int length = (int) (AUDIO_SAMPLE_RATE * ACCEL_SOUND_DURATION);
-        double[] samples = new double[length];
-        double phase = 0.0;
-        for (int i = 0; i < length; i++) {
-            double t = length > 1 ? (double) i / (length - 1) : 0.0;
-            t = Math.min(t, 1.0); // Clamp to ensure it never exceeds 1.0
-            double freq = 180 + 400 * t;
-            phase += 2 * Math.PI * freq / AUDIO_SAMPLE_RATE;
-            double envelope = t < 0.1 ? t * 10 : 1.0 - 0.5 * (t - 0.1);
-            double tone = Math.sin(phase);
-            double noise = (Math.random() * 2 - 1) * 0.08 * (1 - t);
-            double sample = 0.35 * tone * envelope + noise;
-            samples[i] = Math.max(-1.0, Math.min(1.0, sample));
-        }
-        return samples;
-    }
-
-    private double[] createBrakeSound() {
-        int length = (int) (AUDIO_SAMPLE_RATE * BRAKE_SOUND_DURATION);
-        double[] samples = new double[length];
-        double phase = 0.0;
-        for (int i = 0; i < length; i++) {
-            double t = length > 1 ? (double) i / (length - 1) : 0.0;
-            t = Math.min(t, 1.0); // Clamp to ensure it never exceeds 1.0
-            double envelope = 1.0 - t;
-            double noise = (Math.random() * 2 - 1) * 0.25 * envelope;
-            phase += 2 * Math.PI * 80 / AUDIO_SAMPLE_RATE;
-            double lowTone = Math.sin(phase) * 0.18 * envelope;
-            double sample = (noise + lowTone) * 0.7;
-            samples[i] = Math.max(-1.0, Math.min(1.0, sample));
-        }
-        return samples;
-    }
+    // audio removed
 
     private boolean isMouseInTrackButton(int trackIndex, double mouseX, double mouseY) {
         int col = trackIndex % MENU_COLUMNS;
@@ -551,6 +527,13 @@ public class F1Game {
         car.setAngle(Math.atan2(trackPoints[1][1] - trackPoints[0][1], trackPoints[1][0] - trackPoints[0][0]));
         prevCarX = car.getX();
         prevCarY = car.getY();
+        
+        // Load best lap time and path for this track
+        bestLapTime = bestLapTimes.getOrDefault(trackName, Long.MAX_VALUE);
+        bestLapPath = bestLapPaths.get(trackName);
+        currentLapPath.clear();
+        lastLapDelta = null;
+        lastLapDeltaTime = 0;
     }
 
     private void draw() {
@@ -568,6 +551,7 @@ public class F1Game {
 
             drawGrassTexture(camX, camY);
             drawTrackSurface(camX, camY);
+            drawGhostCar(camX, camY);
 
             StdDraw.setPenRadius(0.004);
             StdDraw.setPenColor(StdDraw.RED);
@@ -613,12 +597,14 @@ public class F1Game {
     }
 
     private void drawMenu() {
-        // Gradient background
-        for (int i = 0; i < 200; i++) {
-            int t = (int) (150 + (i * 0.5));
-            StdDraw.setPenColor(new Color(t, t, 255));
-            double h = HEIGHT * (i / 200.0);
-            StdDraw.filledRectangle(WIDTH / 2.0, h + HEIGHT / 400.0, WIDTH / 2.0, HEIGHT / 400.0);
+        // Soft vertical gradient background
+        for (int i = 0; i < HEIGHT; i += 2) {
+            float f = (float) i / HEIGHT;
+            int r = (int) (30 + 80 * f);
+            int g = (int) (40 + 90 * f);
+            int b = (int) (60 + 140 * f);
+            StdDraw.setPenColor(new Color(r, g, b));
+            StdDraw.filledRectangle(WIDTH / 2.0, i + 1, WIDTH / 2.0, 1);
         }
 
         // Top card
@@ -648,15 +634,22 @@ public class F1Game {
             double centerX = x + MENU_PREVIEW_WIDTH / 2.0;
             double centerY = y + MENU_PREVIEW_HEIGHT / 2.0;
 
+            // Update hover state
+            double mx = StdDraw.mouseX();
+            double my = StdDraw.mouseY();
+            if (isMouseInTrackButton(i, mx, my)) {
+                hoveredTrackIndex = i;
+            }
+
             // Shadow
             StdDraw.setPenColor(new Color(0, 0, 0, 100));
             StdDraw.filledRectangle(centerX + 4, centerY - 4, MENU_PREVIEW_WIDTH / 2.0, MENU_PREVIEW_HEIGHT / 2.0);
 
             // Button background
             if (i == hoveredTrackIndex) {
-                StdDraw.setPenColor(new Color(235, 235, 180));
+                StdDraw.setPenColor(new Color(250, 250, 230));
             } else {
-                StdDraw.setPenColor(new Color(230, 230, 230));
+                StdDraw.setPenColor(new Color(245, 245, 245));
             }
             StdDraw.filledRectangle(centerX, centerY, MENU_PREVIEW_WIDTH / 2.0, MENU_PREVIEW_HEIGHT / 2.0);
 
@@ -676,13 +669,22 @@ public class F1Game {
             StdDraw.setFont(new Font("Arial", Font.BOLD, 14));
             StdDraw.setPenColor(new Color(10, 10, 10));
             StdDraw.text(x + MENU_PREVIEW_WIDTH * 0.7, y + 22, tracks[i].name);
+            // show best lap for this track if available
+            long b = bestLapTimes.getOrDefault(tracks[i].name, Long.MAX_VALUE);
+            String best = (b == Long.MAX_VALUE) ? "--:--.---" : formatTime(b);
+            StdDraw.setFont(new Font("Arial", Font.PLAIN, 12));
+            StdDraw.setPenColor(new Color(80, 80, 80));
+            StdDraw.text(x + MENU_PREVIEW_WIDTH * 0.7, y + 6, "Best: " + best);
         }
 
         // Start button
         double startW = 160, startH = 40;
         double startX = WIDTH - 120, startY = 80;
-        StdDraw.setPenColor(new Color(200, 30, 30));
+        StdDraw.setPenColor(new Color(220, 60, 60));
         StdDraw.filledRectangle(startX, startY, startW / 2.0, startH / 2.0);
+        StdDraw.setPenColor(new Color(255, 255, 255, 200));
+        StdDraw.setPenRadius(0.004);
+        StdDraw.rectangle(startX, startY, startW / 2.0, startH / 2.0);
         StdDraw.setPenColor(Color.WHITE);
         StdDraw.setFont(new Font("Verdana", Font.BOLD, 18));
         StdDraw.text(startX, startY, "Start Race");
@@ -792,6 +794,22 @@ public class F1Game {
         }
     }
 
+    private void drawGhostCar(double camX, double camY) {
+        if (bestLapPath == null || bestLapPath.isEmpty()) {
+            return;
+        }
+        double ratio = 0.0;
+        if (lapTimingStarted && bestLapTime != Long.MAX_VALUE) {
+            long now = System.currentTimeMillis();
+            ratio = Math.min(1.0, (double) (now - lapStartTime) / Math.max(1, bestLapTime));
+        }
+        int index = (int) Math.round(ratio * (bestLapPath.size() - 1));
+        index = Math.max(0, Math.min(bestLapPath.size() - 1, index));
+        double[] ghost = bestLapPath.get(index);
+        car.drawGhost(ghost[0], ghost[1], ghost[2], camX, camY,
+                VIEW_X, VIEW_Y, VIEW_WIDTH, VIEW_HEIGHT);
+    }
+
     private void drawGrassTexture(double camX, double camY) {
         // Fill the view area with a dark green base for the grass
         StdDraw.setPenColor(new Color(22, 120, 30));
@@ -862,7 +880,21 @@ public class F1Game {
             StdDraw.text(90, HEIGHT - 90, "Best: " + bestLap);
             StdDraw.setPenColor(StdDraw.WHITE);
         }
-        StdDraw.text(90, HEIGHT - 110, "W/up:Accelerate S/down:Brake A/left:Left D/right:Right");
+
+        int controlsY = HEIGHT - 110;
+        if (lastLapDelta != null && now - lastLapDeltaTime < 5000) {
+            long delta = lastLapDelta;
+            long absDelta = Math.abs(delta);
+            String deltaSign = delta < 0 ? "-" : "+";
+            String deltaText = String.format("%s%02d:%02d.%03d", deltaSign,
+                    absDelta / 60000, (absDelta / 1000) % 60, absDelta % 1000);
+            StdDraw.setPenColor(delta < 0 ? new Color(100, 255, 100) : new Color(255, 120, 120));
+            StdDraw.text(90, HEIGHT - 110, "Δ: " + deltaText);
+            StdDraw.setPenColor(StdDraw.WHITE);
+            StdDraw.text(90, HEIGHT - 130, delta < 0 ? "Time gained" : "Time lost");
+            controlsY = HEIGHT - 150;
+        }
+        StdDraw.text(90, controlsY, "W/up:Accelerate S/down:Brake A/left:Left D/right:Right");
     }
 
     private String formatTime(long ms) {
@@ -1005,6 +1037,99 @@ class Car {
         StdDraw.polygon(xpts, ypts);
 
         drawCarDetails(camX, camY, viewX, viewY, viewWidth, viewHeight);
+    }
+
+    public void drawGhost(double gx, double gy, double gangle,
+                          double camX, double camY, int viewX, int viewY,
+                          int viewWidth, int viewHeight) {
+        double cos = Math.cos(gangle);
+        double sin = Math.sin(gangle);
+
+        double[] xpts = new double[4];
+        double[] ypts = new double[4];
+        double[] localX = {-15, 15, 15, -15};
+        double[] localY = {10, 10, -10, -10};
+
+        for (int i = 0; i < xpts.length; i++) {
+            double worldX = gx + localX[i] * -sin + localY[i] * cos;
+            double worldY = gy + localX[i] * cos + localY[i] * sin;
+            xpts[i] = viewX + worldX - camX + viewWidth / 2.0;
+            ypts[i] = viewY + worldY - camY + viewHeight / 2.0;
+        }
+
+        Color fill = new Color(200, 25, 30, 77);
+        Color border = new Color(30, 30, 30, 77);
+        StdDraw.setPenColor(fill);
+        StdDraw.filledPolygon(xpts, ypts);
+        StdDraw.setPenColor(border);
+        StdDraw.setPenRadius(0.004);
+        StdDraw.polygon(xpts, ypts);
+
+        drawGhostDetails(gx, gy, gangle, camX, camY, viewX, viewY, viewWidth, viewHeight);
+    }
+
+    private void drawGhostDetails(double gx, double gy, double gangle,
+                                  double camX, double camY, int viewX, int viewY,
+                                  int viewWidth, int viewHeight) {
+        double cos = Math.cos(gangle);
+        double sin = Math.sin(gangle);
+
+        double[] stripeX = {-2, 2, 4, 4, 2, -2, -4, -4};
+        double[] stripeY = {15, 15, 8, -2, -8, -8, -2, 8};
+        drawGhostLocalPolygon(stripeX, stripeY, new Color(255, 220, 20, 77), null,
+                cos, sin, gx, gy, camX, camY, viewX, viewY, viewWidth, viewHeight);
+
+        double[] cockpitX = {-3, 3, 4, 3, -3, -4};
+        double[] cockpitY = {4, 4, -2, -5, -5, -2};
+        drawGhostLocalPolygon(cockpitX, cockpitY, new Color(50, 50, 80, 77), null,
+                cos, sin, gx, gy, camX, camY, viewX, viewY, viewWidth, viewHeight);
+
+        double[] frontWingX = {-13, 13, 11, 11, -11, -11};
+        double[] frontWingY = {8, 8, 6, 5, 5, 6};
+        drawGhostLocalPolygon(frontWingX, frontWingY, new Color(45, 45, 45, 77),
+                new Color(20, 20, 20, 77), cos, sin, gx, gy, camX, camY,
+                viewX, viewY, viewWidth, viewHeight);
+
+        drawGhostWheel(-11, -9, gx, gy, camX, camY, viewX, viewY, viewWidth, viewHeight, cos, sin);
+        drawGhostWheel(11, -9, gx, gy, camX, camY, viewX, viewY, viewWidth, viewHeight, cos, sin);
+        drawGhostWheel(-9, 6, gx, gy, camX, camY, viewX, viewY, viewWidth, viewHeight, cos, sin);
+        drawGhostWheel(9, 6, gx, gy, camX, camY, viewX, viewY, viewWidth, viewHeight, cos, sin);
+    }
+
+    private void drawGhostLocalPolygon(double[] localX, double[] localY, Color fill, Color border,
+                                       double cos, double sin, double gx, double gy,
+                                       double camX, double camY, int viewX, int viewY,
+                                       int viewWidth, int viewHeight) {
+        double[] xpts = new double[localX.length];
+        double[] ypts = new double[localY.length];
+        for (int i = 0; i < localX.length; i++) {
+            double worldX = gx + localX[i] * -sin + localY[i] * cos;
+            double worldY = gy + localX[i] * cos + localY[i] * sin;
+            xpts[i] = viewX + worldX - camX + viewWidth / 2.0;
+            ypts[i] = viewY + worldY - camY + viewHeight / 2.0;
+        }
+        if (fill != null) {
+            StdDraw.setPenColor(fill);
+            StdDraw.filledPolygon(xpts, ypts);
+        }
+        if (border != null) {
+            StdDraw.setPenColor(border);
+            StdDraw.setPenRadius(0.003);
+            StdDraw.polygon(xpts, ypts);
+        }
+    }
+
+    private void drawGhostWheel(double localX, double localY, double gx, double gy,
+                           double camX, double camY, int viewX, int viewY,
+                           int viewWidth, int viewHeight, double cos, double sin) {
+        double worldX = gx + localX * -sin + localY * cos;
+        double worldY = gy + localX * cos + localY * sin;
+        double screenX = viewX + worldX - camX + viewWidth / 2.0;
+        double screenY = viewY + worldY - camY + viewHeight / 2.0;
+        StdDraw.setPenColor(new Color(25, 25, 25, 77));
+        StdDraw.filledEllipse(screenX, screenY, 3.0, 1.8);
+        StdDraw.setPenColor(new Color(90, 90, 90, 77));
+        StdDraw.filledEllipse(screenX, screenY, 1.6, 0.8);
     }
 
     private void drawCarDetails(double camX, double camY, int viewX, int viewY, int viewWidth, int viewHeight) {
